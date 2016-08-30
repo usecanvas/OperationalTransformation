@@ -9,40 +9,40 @@
 import WebKit
 
 public protocol TransportControllerDelegate: class {
-	func transportController(controller: TransportController, willConnectWithWebView webView: WKWebView)
-	func transportController(controller: TransportController, didReceiveSnapshot text: String)
-	func transportController(controller: TransportController, didReceiveOperation operation: Operation)
-	func transportController(controller: TransportController, didReceiveWebErrorMessage errorMessage: String?, lineNumber: UInt?, columnNumber: UInt?)
-	func transportController(controller: TransportController, didDisconnectWithErrorMessage errorMessage: String?)
+	func transportController(_ controller: TransportController, willConnectWithWebView webView: WKWebView)
+	func transportController(_ controller: TransportController, didReceiveSnapshot text: String)
+	func transportController(_ controller: TransportController, didReceiveOperation operation: Operation)
+	func transportController(_ controller: TransportController, didReceiveWebErrorMessage errorMessage: String?, lineNumber: UInt?, columnNumber: UInt?)
+	func transportController(_ controller: TransportController, didDisconnectWithErrorMessage errorMessage: String?)
 }
 
 private let indexHTML: String? = {
-	let bundle = NSBundle(forClass: TransportController.self)
-	guard let editorPath = bundle.pathForResource("index", ofType: "html"),
-		html = try? String(contentsOfFile: editorPath, encoding: NSUTF8StringEncoding)
+	let bundle = Bundle(for: TransportController.self)
+	guard let editorPath = bundle.path(forResource: "index", ofType: "html"),
+		let html = try? String(contentsOfFile: editorPath, encoding: String.Encoding.utf8)
 	else { return nil }
 
 	return html
 }()
 
 
-public class TransportController: NSObject {
+open class TransportController: NSObject {
 	
 	// MARK: - Properties
 
-	public let serverURL: NSURL
-	private let accessToken: String
-	public let organizationID: String
-	public let canvasID: String
-	public let debug: Bool
-	public weak var delegate: TransportControllerDelegate?
+	open let serverURL: URL
+	fileprivate let accessToken: String
+	open let organizationID: String
+	open let canvasID: String
+	open let debug: Bool
+	open weak var delegate: TransportControllerDelegate?
 
 	var webView: WKWebView!
 
 	
 	// MARK: - Initializers
 	
-	public init(serverURL: NSURL, accessToken: String, organizationID: String, canvasID: String, debug: Bool = false) {
+	public init(serverURL: URL, accessToken: String, organizationID: String, canvasID: String, debug: Bool = false) {
 		self.serverURL = serverURL
 		self.accessToken = accessToken
 		self.organizationID = organizationID
@@ -61,7 +61,7 @@ public class TransportController: NSObject {
 
 		// Setup script handler
 		let userContentController = WKUserContentController()
-		userContentController.addScriptMessageHandler(self, name: "share")
+		userContentController.add(self, name: "share")
 
 		// Connect
 		let js = "Canvas.connect({" +
@@ -71,7 +71,7 @@ public class TransportController: NSObject {
 			"canvasID: '\(canvasID)', " +
 			"debug: \(debug)" +
 		"});"
-		userContentController.addUserScript(WKUserScript(source: js, injectionTime: .AtDocumentEnd, forMainFrameOnly: true))
+		userContentController.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 		configuration.userContentController = userContentController
 
 		// Load file
@@ -86,24 +86,24 @@ public class TransportController: NSObject {
 
 	// MARK: - Connecting
 
-	public func connect() {
+	open func connect() {
 		guard let html = indexHTML else { return }
 
 		if webView.superview == nil {
 			delegate?.transportController(self, willConnectWithWebView: webView)
 		}
 		
-		webView.loadHTMLString(html, baseURL: NSURL(string: "https://usecanvas.com/"))
+		webView.loadHTMLString(html, baseURL: URL(string: "https://usecanvas.com/"))
 	}
 
-	public func disconnect(withReason reason: String? = nil) {
+	open func disconnect(withReason reason: String? = nil) {
 		webView.removeFromSuperview()
 		delegate?.transportController(self, didDisconnectWithErrorMessage: reason)
 	}
 	
 	// MARK: - Operations
 	
-	public func submit(operation operation: Operation) {
+	open func submit(operation: Operation) {
 		switch operation {
 		case .insert(let location, let string): insert(atLocation: location, string: string)
 		case .remove(let location, let length): remove(atLocation: location, length: length)
@@ -113,24 +113,24 @@ public class TransportController: NSObject {
 	
 	// MARK: - Private
 	
-	private func insert(atLocation location: UInt, string: String) {
-		guard let data = try? NSJSONSerialization.dataWithJSONObject([string], options: []),
-			json = String(data: data, encoding: NSUTF8StringEncoding)
+	fileprivate func insert(atLocation location: UInt, string: String) {
+		guard let data = try? JSONSerialization.data(withJSONObject: [string], options: []),
+			let json = String(data: data, encoding: String.Encoding.utf8)
 		else { return }
 		
 		webView.evaluateJavaScript("Canvas.insert(\(location), \(json)[0]);", completionHandler: nil)
 	}
 	
-	private func remove(atLocation location: UInt, length: UInt) {
+	fileprivate func remove(atLocation location: UInt, length: UInt) {
 		webView.evaluateJavaScript("Canvas.remove(\(location), \(length));", completionHandler: nil)
 	}
 }
 
 
 extension TransportController: WKScriptMessageHandler {
-	public func userContentController(userContentController: WKUserContentController, didReceiveScriptMessage scriptMessage: WKScriptMessage) {
-		guard let dictionary = scriptMessage.body as? [String: AnyObject],
-			message = Message(dictionary: dictionary)
+	public func userContentController(_ userContentController: WKUserContentController, didReceive scriptMessage: WKScriptMessage) {
+		guard let dictionary = scriptMessage.body as? [String: Any],
+			let message = Message(dictionary: dictionary)
 		else {
 			print("[TransportController] Unknown message: \(scriptMessage.body)")
 			return

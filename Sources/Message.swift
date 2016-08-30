@@ -12,10 +12,10 @@ enum Message {
 	case error(message: String?, lineNumber: UInt?, columnNumber: UInt?)
 	case disconnect(message: String?)
 
-	init?(dictionary: [String: AnyObject]) {
+	init?(dictionary: [String: Any]) {
 		guard let type = dictionary["type"] as? String else { return nil }
 
-		if type == "operation", let dict = dictionary["operation"] as? [String: AnyObject], operation = Operation(dictionary: dict) {
+		if type == "operation", let dict = dictionary["operation"] as? [String: Any], let operation = Operation(dictionary: dict) {
 			self = .operation(operation: operation)
 			return
 		}
